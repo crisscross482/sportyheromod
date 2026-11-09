@@ -21,10 +21,28 @@ const btnCashout = document.getElementById('btn-cashout');
 const betStatusMsg = document.getElementById('bet-status-msg');
 const historyContainer = document.getElementById('history-container');
 
-// Canvas setup
+// Canvas setup & Visual FX engine
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 let points = [];
+let particles = [];
+let stars = [];
+let isCrashedState = false;
+let animMultiplier = 1.00;
+let targetMultiplier = 1.00;
+
+function initStars() {
+  stars = [];
+  for (let i = 0; i < 40; i++) {
+    stars.push({
+      x: Math.random(),
+      y: Math.random(),
+      size: Math.random() * 1.8 + 0.5,
+      speed: Math.random() * 0.002 + 0.001
+    });
+  }
+}
+initStars();
 
 function updateBalanceDisplay() {
   balanceDisplayEl.textContent = balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -38,58 +56,171 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-function drawGraph(multiplier, crashed = false) {
+function addParticle(x, y, isExplosion = false) {
+  const count = isExplosion ? 30 : 2;
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x,
+      y,
+      vx: isExplosion ? (Math.random() - 0.5) * 8 : -Math.random() * 2 - 1,
+      vy: isExplosion ? (Math.random() - 0.5) * 8 : (Math.random() - 0.5) * 1.5,
+      radius: isExplosion ? Math.random() * 4 + 2 : Math.random() * 3 + 1,
+      alpha: 1.0,
+      decay: isExplosion ? Math.random() * 0.02 + 0.015 : Math.random() * 0.04 + 0.03,
+      color: isExplosion
+        ? ['#ef4444', '#f97316', '#fbbf24'][Math.floor(Math.random() * 3)]
+        : ['#38bdf8', '#818cf8', '#f59e0b'][Math.floor(Math.random() * 3)]
+    });
+  }
+}
+
+function drawHeroPlane(x, y, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  // Glow under hero
+  ctx.shadowColor = '#38bdf8';
+  ctx.shadowBlur = 15;
+
+  // Fuselage / Jet Body
+  ctx.beginPath();
+  ctx.moveTo(18 * window.devicePixelRatio, 0);
+  ctx.lineTo(-14 * window.devicePixelRatio, -10 * window.devicePixelRatio);
+  ctx.lineTo(-8 * window.devicePixelRatio, 0);
+  ctx.lineTo(-14 * window.devicePixelRatio, 10 * window.devicePixelRatio);
+  ctx.closePath();
+  ctx.fillStyle = '#f8fafc';
+  ctx.fill();
+
+  // Wings / Accent
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-8 * window.devicePixelRatio, -16 * window.devicePixelRatio);
+  ctx.lineTo(-12 * window.devicePixelRatio, -12 * window.devicePixelRatio);
+  ctx.lineTo(-6 * window.devicePixelRatio, 0);
+  ctx.lineTo(-12 * window.devicePixelRatio, 12 * window.devicePixelRatio);
+  ctx.lineTo(-8 * window.devicePixelRatio, 16 * window.devicePixelRatio);
+  ctx.closePath();
+  ctx.fillStyle = '#38bdf8';
+  ctx.fill();
+
+  // Jet thruster exhaust flame
+  ctx.beginPath();
+  ctx.moveTo(-10 * window.devicePixelRatio, -4 * window.devicePixelRatio);
+  ctx.lineTo(-24 * window.devicePixelRatio, 0);
+  ctx.lineTo(-10 * window.devicePixelRatio, 4 * window.devicePixelRatio);
+  ctx.closePath();
+  ctx.fillStyle = '#f59e0b';
+  ctx.shadowColor = '#f59e0b';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// Continuous Animation Loop
+function renderFrame() {
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  // Background grid lines
-  ctx.strokeStyle = '#1e293b';
+  // 1. Moving starry background
+  ctx.fillStyle = '#ffffff';
+  stars.forEach(s => {
+    if (badgeStatusEl.textContent === 'Flying') {
+      s.x -= s.speed;
+      if (s.x < 0) s.x = 1.0;
+    }
+    ctx.globalAlpha = 0.35;
+    ctx.fillRect(s.x * w, s.y * h, s.size * window.devicePixelRatio, s.size * window.devicePixelRatio);
+  });
+  ctx.globalAlpha = 1.0;
+
+  // 2. Grid lines
+  ctx.strokeStyle = 'rgba(30, 58, 138, 0.25)';
   ctx.lineWidth = 1;
-  const gridCount = 5;
-  for (let i = 1; i <= gridCount; i++) {
-    const y = (h / gridCount) * i;
+  const gridLines = 5;
+  for (let i = 1; i <= gridLines; i++) {
+    const y = (h / gridLines) * i;
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(w, y);
     ctx.stroke();
   }
 
-  if (points.length < 2) return;
+  // 3. Smooth trajectory interpolation
+  animMultiplier += (targetMultiplier - animMultiplier) * 0.15;
 
-  // Draw curve
-  ctx.beginPath();
-  ctx.moveTo(points[0].x * w, points[0].y * h);
-  for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i].x * w, points[i].y * h);
+  if (points.length >= 2) {
+    // Flight trail line
+    ctx.beginPath();
+    ctx.moveTo(points[0].x * w, points[0].y * h);
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x * w, points[i].y * h);
+    }
+
+    ctx.strokeStyle = isCrashedState ? '#ef4444' : '#38bdf8';
+    ctx.lineWidth = 4 * window.devicePixelRatio;
+    ctx.shadowColor = isCrashedState ? '#ef4444' : '#38bdf8';
+    ctx.shadowBlur = 12;
+    ctx.stroke();
+
+    // Fill underneath trail
+    ctx.lineTo(points[points.length - 1].x * w, h);
+    ctx.lineTo(points[0].x * w, h);
+    ctx.closePath();
+    ctx.fillStyle = isCrashedState ? 'rgba(239, 68, 68, 0.08)' : 'rgba(56, 189, 248, 0.12)';
+    ctx.shadowBlur = 0;
+    ctx.fill();
+
+    // Head position
+    const tip = points[points.length - 1];
+    const tipX = tip.x * w;
+    const tipY = tip.y * h;
+
+    if (!isCrashedState && badgeStatusEl.textContent === 'Flying') {
+      addParticle(tipX - 10, tipY);
+      // Angle based on last segment
+      const prev = points[Math.max(0, points.length - 3)];
+      const angle = Math.atan2((tip.y - prev.y) * h, (tip.x - prev.x) * w);
+      drawHeroPlane(tipX, tipY, angle);
+    }
   }
 
-  ctx.strokeStyle = crashed ? '#ef4444' : '#3b82f6';
-  ctx.lineWidth = 4 * window.devicePixelRatio;
-  ctx.stroke();
+  // 4. Update and draw particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.alpha -= p.decay;
 
-  // Area under curve
-  ctx.lineTo(points[points.length - 1].x * w, h);
-  ctx.lineTo(points[0].x * w, h);
-  ctx.closePath();
-  ctx.fillStyle = crashed ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)';
-  ctx.fill();
+    if (p.alpha <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
 
-  // Rocket or dot at the tip
-  const lastPoint = points[points.length - 1];
-  ctx.beginPath();
-  ctx.arc(lastPoint.x * w, lastPoint.y * h, 7 * window.devicePixelRatio, 0, Math.PI * 2);
-  ctx.fillStyle = crashed ? '#ef4444' : '#60a5fa';
-  ctx.fill();
+    ctx.save();
+    ctx.globalAlpha = p.alpha;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  requestAnimationFrame(renderFrame);
 }
+requestAnimationFrame(renderFrame);
 
 function addGraphPoint(multiplier) {
-  // Map multiplier to canvas coordinate
-  const maxM = Math.max(2.0, multiplier * 1.1);
-  const normalizedY = 1.0 - ((multiplier - 1.0) / (maxM - 1.0)) * 0.85;
-  const x = Math.min(0.9, 0.05 + ((multiplier - 1.0) / (maxM - 1.0)) * 0.85);
+  const maxM = Math.max(2.2, multiplier * 1.15);
+  const normalizedY = 1.0 - ((multiplier - 1.0) / (maxM - 1.0)) * 0.8;
+  const x = Math.min(0.88, 0.06 + ((multiplier - 1.0) / (maxM - 1.0)) * 0.82);
 
-  points.push({ x, y: Math.max(0.1, normalizedY) });
+  points.push({ x, y: Math.max(0.12, normalizedY) });
 }
 
 function renderHistory(rounds) {
@@ -108,7 +239,6 @@ function renderHistory(rounds) {
     chip.addEventListener('click', () => {
       document.getElementById('verify-server-seed').value = round.roundHash;
       document.getElementById('verify-client-seed').value = round.clientSeed;
-      // Find parent hash in history if available
       const idx = historyData.findIndex(r => r.roundId === round.roundId);
       if (idx > 0) {
         document.getElementById('verify-prev-hash').value = historyData[idx - 1].roundHash;
@@ -135,6 +265,7 @@ function initEventSource() {
 
   evtSource.addEventListener('countdown', (e) => {
     const data = JSON.parse(e.data);
+    isCrashedState = false;
     countdownOverlayEl.style.display = 'block';
     countdownOverlayEl.textContent = `Next round starts in ${data.countdown}s`;
     badgeStatusEl.className = 'badge badge-waiting';
@@ -147,6 +278,10 @@ function initEventSource() {
     currentRoundId = data.roundId;
     roundNumberEl.textContent = currentRoundId;
 
+    isCrashedState = false;
+    animMultiplier = 1.00;
+    targetMultiplier = 1.00;
+
     countdownOverlayEl.style.display = 'none';
     multiplierOverlayEl.classList.remove('crashed');
     multiplierOverlayEl.textContent = '1.00x';
@@ -155,10 +290,8 @@ function initEventSource() {
     badgeStatusEl.className = 'badge badge-running';
     badgeStatusEl.textContent = 'Flying';
 
-    points = [{ x: 0.05, y: 0.95 }];
-    drawGraph(1.00, false);
+    points = [{ x: 0.06, y: 0.92 }];
 
-    // If player bet placed before round started
     if (isBetActive) {
       btnBet.disabled = true;
       btnCashout.disabled = false;
@@ -171,6 +304,8 @@ function initEventSource() {
   evtSource.addEventListener('tick', (e) => {
     const data = JSON.parse(e.data);
     const m = data.currentMultiplier;
+    targetMultiplier = m;
+
     if (badgeStatusEl.textContent !== 'Flying') {
       badgeStatusEl.className = 'badge badge-running';
       badgeStatusEl.textContent = 'Flying';
@@ -181,9 +316,8 @@ function initEventSource() {
     }
     multiplierOverlayEl.textContent = `${m.toFixed(2)}x`;
     addGraphPoint(m);
-    drawGraph(m, false);
 
-    // Handle auto-cashout
+    // Auto-cashout
     if (isBetActive && !hasCashedOutThisRound) {
       if (autoCashoutVal > 1.0 && m >= autoCashoutVal) {
         cashOut(autoCashoutVal);
@@ -193,15 +327,19 @@ function initEventSource() {
 
   evtSource.addEventListener('crash', (e) => {
     const data = JSON.parse(e.data);
+    targetMultiplier = data.crashMultiplier;
     multiplierOverlayEl.textContent = `${data.crashMultiplier.toFixed(2)}x`;
     multiplierOverlayEl.classList.add('crashed');
 
     badgeStatusEl.className = 'badge badge-crashed';
     badgeStatusEl.textContent = 'Crashed';
 
-    drawGraph(data.crashMultiplier, true);
+    isCrashedState = true;
+    if (points.length > 0) {
+      const tip = points[points.length - 1];
+      addParticle(tip.x * canvas.width, tip.y * canvas.height, true);
+    }
 
-    // If player was in round and didn't cash out
     if (isBetActive && !hasCashedOutThisRound) {
       betStatusMsg.textContent = `Crashed at ${data.crashMultiplier.toFixed(2)}x. You lost ${currentBet.toFixed(2)} credits.`;
       betStatusMsg.className = 'status-msg lose';
@@ -211,7 +349,6 @@ function initEventSource() {
     btnBet.disabled = false;
     btnCashout.disabled = true;
 
-    // Add to history
     historyData.unshift(data);
     if (historyData.length > 50) historyData.pop();
     renderHistory(historyData);
@@ -258,7 +395,6 @@ btnBet.addEventListener('click', () => {
   betStatusMsg.textContent = `Bet queued for next round (${betVal.toFixed(2)} credits).`;
   betStatusMsg.className = 'status-msg';
 
-  // If game is currently running, activate cashout immediately
   if (badgeStatusEl.textContent === 'Flying') {
     btnCashout.disabled = false;
   }

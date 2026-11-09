@@ -69,7 +69,7 @@ function launchRound() {
     previousHash: currentRoundIndex < CHAIN_LENGTH ? fullChain[currentRoundIndex + 1] : null
   });
 
-  const growthRate = 0.06; // exponential multiplier speed: e^(0.06 * seconds)
+  const growthRate = 0.15; // fast-paced multiplier speed: e^(0.15 * seconds)
 
   const tickInterval = setInterval(() => {
     if (gameState !== 'RUNNING') {
@@ -78,7 +78,7 @@ function launchRound() {
     }
 
     const elapsedSeconds = (Date.now() - roundStartTime) / 1000;
-    // Exponential formula: 1.00 * e^(0.06 * t)
+    // Exponential formula: 1.00 * e^(0.15 * t)
     currentMultiplier = Math.floor(Math.exp(growthRate * elapsedSeconds) * 100) / 100;
 
     if (currentMultiplier >= crashMultiplier) {
