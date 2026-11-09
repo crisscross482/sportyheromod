@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Provably Fair Crash Simulator & Verifier</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-container">
+      <h1>🚀 Provably Fair Crash Game Engine & Research Simulator</h1>
+      <p class="subtitle">An educational simulation demonstrating cryptographic randomness, hash chain validation, and why outcome prediction is mathematically impossible.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Top section: Visual Game & Controls -->
+    <div class="grid-2-col">
+      <!-- Game Display Card -->
+      <section class="card game-card">
+        <div class="card-header">
+          <h2>Live Simulation (Round #<span id="round-number">1</span>)</h2>
+          <span id="badge-status" class="badge badge-waiting">Connecting...</span>
+        </div>
+
+        <div class="canvas-wrapper">
+          <canvas id="game-canvas" width="600" height="320"></canvas>
+          <div id="multiplier-overlay" class="multiplier-overlay">1.00x</div>
+          <div id="countdown-overlay" class="countdown-overlay" style="display: none;">Next round in 5s</div>
+        </div>
+
+        <!-- Player Demo Controls -->
+        <div class="controls-panel">
+          <div class="wallet-bar">
+            <span>Demo Balance: <strong id="balance-display">1,000.00</strong> Credits</span>
+            <button id="btn-reset-balance" class="btn-text">Reset</button>
+          </div>
+
+          <div class="action-bar">
+            <div class="input-group">
+              <label for="input-bet">Demo Bet</label>
+              <input type="number" id="input-bet" value="50" min="1" max="1000" step="5">
+            </div>
+
+            <div class="input-group">
+              <label for="input-autocashout">Auto Cashout</label>
+              <input type="number" id="input-autocashout" value="2.00" min="1.01" step="0.1">
+            </div>
+
+            <button id="btn-bet" class="btn btn-primary">Place Bet</button>
+            <button id="btn-cashout" class="btn btn-success" disabled>Cash Out</button>
+          </div>
+          <div id="bet-status-msg" class="status-msg"></div>
+        </div>
+      </section>
+
+      <!-- Provably Fair Verifier Card -->
+      <section class="card verifier-card">
+        <div class="card-header">
+          <h2>🔍 Independent Round Verifier</h2>
+          <span class="badge badge-info">Provably Fair</span>
+        </div>
+        <p class="description-text">
+          Validate that any completed round multiplier was genuinely calculated from its published seeds and not tampered with.
+        </p>
+
+        <form id="verify-form" class="verify-form">
+          <div class="form-group">
+            <label for="verify-server-seed">Revealed Server Seed (SHA-256):</label>
+            <input type="text" id="verify-server-seed" placeholder="Paste round hash here..." required>
+          </div>
+          <div class="form-group">
+            <label for="verify-client-seed">Client Seed / Salt:</label>
+            <input type="text" id="verify-client-seed" value="sporty_hero_edu_demo_client_seed_2025" required>
+          </div>
+          <div class="form-group">
+            <label for="verify-prev-hash">Parent Hash in Chain (Optional):</label>
+            <input type="text" id="verify-prev-hash" placeholder="Optional hash to test chain continuity (sha256(seed) = parent)">
+          </div>
+          <button type="submit" id="btn-verify" class="btn btn-secondary">Calculate & Verify</button>
+        </form>
+
+        <div id="verify-result" class="verify-result" style="display: none;">
+          <h3>Verification Result:</h3>
+          <p><strong>Derived Multiplier:</strong> <span id="res-multiplier">-</span></p>
+          <p><strong>Hash Chain Check:</strong> <span id="res-chain-check">-</span></p>
+          <p class="note">Formula: <code>HMAC_SHA256(Seed, ClientSeed) -> First 52 bits -> Uniform float -> Multiplier</code></p>
+        </div>
+      </section>
+    </div>
+
+    <!-- History Bar -->
+    <section class="card history-card">
+      <div class="card-header">
+        <h2>Past Multiplier History</h2>
+        <span class="hint">Click any round to inspect and autofill the verifier</span>
+      </div>
+      <div id="history-container" class="history-chips">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+
+    <!-- Educational Deep Dive -->
+    <section class="card educational-card">
+      <div class="card-header">
+        <h2>🔬 The Science: Why "Crash Predictors" Cannot Work</h2>
+      </div>
+      <div class="edu-grid">
+        <div class="edu-box">
+          <h3>1. Pre-Image Resistance (SHA-256)</h3>
+          <p>The server generates a chain of millions of hashes where $H_n = \text{SHA256}(H_{n-1})$. The game plays in reverse. To know the next round's seed in advance, an attacker or bot would need to reverse SHA-256 (find the pre-image), which requires $2^{256}$ operations—computationally impossible with modern and foreseeable supercomputers.</p>
+        </div>
+
+        <div class="edu-box">
+          <h3>2. Zero Memory / Markov Property</h3>
+          <p>Each crash point is deterministically generated from an independent cryptographic hash. Observing 10 consecutive "low" multipliers gives exactly 0.00% extra probability that the next multiplier will be "high". Believing a high multiplier is "due" is the classical <em>Gambler's Fallacy</em>.</p>
+        </div>
+
+        <div class="edu-box">
+          <h3>3. Client-Side Decoupling</h3>
+          <p>In games like Sporty Hero or Aviator, the browser receives only the visual tick progression. The crash point is resolved inside the server backend or determined by the pre-committed hash. No bot or browser extension has access to server secrets before the round concludes.</p>
+        </div>
+
+        <div class="edu-box">
+          <h3>4. Retrospective vs. Prospective</h3>
+          <p>Provably Fair systems are deliberately engineered for <strong>retrospective auditing</strong> (confirming honesty after the round finishes) rather than <strong>prospective forecasting</strong>. Any software sold online as an "accurate crash predictor bot" is mathematically fraudulent.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-container">
+      <p>Educational Provably Fair Simulator & Research Project • Clean-room demonstration of cryptographic random distribution.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

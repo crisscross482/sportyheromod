@@ -1,0 +1,10 @@
+{
+  "name": "provably-fair-crash-simulator",
+  "version": "1.0.0",
+  "description": "Educational Provably Fair Crash Game Simulator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}
